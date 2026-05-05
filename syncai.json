@@ -35,6 +35,9 @@
       "name": "claude",
       "context": {
         "path": "CLAUDE.md"
+      },
+      "skills": {
+        "pattern": ".claude/skills/*"
       }
     },
     {
@@ -50,6 +53,9 @@
       "name": "codex",
       "context": {
         "path": "AGENTS.md"
+      },
+      "skills": {
+        "pattern": ".codex/skills/*"
       }
     }
   ]

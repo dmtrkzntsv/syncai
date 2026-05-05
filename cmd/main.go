@@ -171,12 +171,12 @@ func initialSync(cfg config.Config, sync *syncai.SyncAI) {
 			}
 			modT := fi.ModTime()
 
-			_, kind, stem := sync.Identify(path)
+			_, kind, stem, rel := sync.Identify(path)
 			if kind == model.KindUnknown {
 				continue
 			}
 
-			key := string(kind) + "|" + stem
+			key := string(kind) + "|" + stem + "|" + rel
 			if cur, ok := latest[key]; !ok || modT.After(cur.mod) {
 				latest[key] = newest{path: path, mod: modT}
 			}

@@ -25,14 +25,15 @@ func New(cfg config.Config) *SyncAI {
 // Delete propagates deletion of a watched file to corresponding destinations across other agents.
 func (s *SyncAI) Delete(path string) ([]string, error) {
 	result := make([]string, 0)
-	srcAgent, kind, stem := s.Identify(path)
+	srcAgent, kind, stem, rel := s.Identify(path)
 	result = append(result, path)
 	if kind == model.KindUnknown || srcAgent == nil {
 		return result, nil // nothing to do
 	}
 
-	// Only propagate deletions for rules. Context/ignore deletions are not propagated to avoid accidental removals.
-	if kind != model.KindRules {
+	// Only propagate deletions for rules and skills. Context/ignore deletions
+	// are not propagated to avoid accidental removals.
+	if kind != model.KindRules && kind != model.KindSkills {
 		return result, nil
 	}
 
@@ -42,19 +43,24 @@ func (s *SyncAI) Delete(path string) ([]string, error) {
 			continue
 		}
 
-		dstPath := s.generatePath(dstAgent, kind, stem)
+		dstPath := s.generatePath(dstAgent, kind, stem, rel)
 		if dstPath == "" {
 			continue
 		}
 		if err := os.Remove(dstPath); err != nil {
 			if os.IsNotExist(err) {
-				// Already gone at the destination; nothing to do
+				// Already gone at the destination
 				result = append(result, dstPath)
-				continue
+			} else {
+				return result, err
 			}
-			return result, err
 		} else {
 			result = append(result, dstPath)
+		}
+
+		// For skills, prune now-empty parent dirs up to the skills base.
+		if kind == model.KindSkills {
+			util.PruneEmptyDirs(filepath.Dir(dstPath), skillsBaseDir(dstAgent.Skills.Pattern))
 		}
 	}
 	return result, nil
@@ -63,9 +69,13 @@ func (s *SyncAI) Delete(path string) ([]string, error) {
 // Sync propagates creation/update of a watched file across other agents.
 func (s *SyncAI) Sync(path string) ([]string, error) {
 	result := make([]string, 0)
-	srcAgent, kind, stem := s.Identify(path)
+	srcAgent, kind, stem, rel := s.Identify(path)
 	if kind == model.KindUnknown || srcAgent == nil {
 		return result, nil // unknown file, ignore
+	}
+
+	if kind == model.KindSkills {
+		return s.syncSkill(srcAgent, path, stem, rel)
 	}
 
 	stack := model.DocumentStack{
@@ -83,7 +93,7 @@ func (s *SyncAI) Sync(path string) ([]string, error) {
 		if dstAgent.Name == srcAgent.Name {
 			docPath = path
 		} else {
-			docPath = s.generatePath(dstAgent, kind, stem)
+			docPath = s.generatePath(dstAgent, kind, stem, rel)
 			if docPath == "" {
 				continue
 			}
@@ -103,7 +113,7 @@ func (s *SyncAI) Sync(path string) ([]string, error) {
 			continue
 		}
 
-		dstPath := s.generatePath(dstAgent, kind, stem)
+		dstPath := s.generatePath(dstAgent, kind, stem, rel)
 		if strings.TrimSpace(dstPath) == "" {
 			// No target path configured for this agent/kind; skip writing
 			continue
@@ -122,50 +132,58 @@ func (s *SyncAI) Sync(path string) ([]string, error) {
 	return result, nil
 }
 
-func (s *SyncAI) Identify(path string) (*config.Agent, model.Kind, string) {
+// syncSkill copies a single file inside a skill folder verbatim to every
+// other agent that has a skills pattern configured.
+func (s *SyncAI) syncSkill(srcAgent *config.Agent, path, stem, rel string) ([]string, error) {
+	result := make([]string, 0)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return result, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	for i := range s.cfg.Agents {
+		dstAgent := &s.cfg.Agents[i]
+		if srcAgent.Name == dstAgent.Name {
+			continue
+		}
+		if strings.TrimSpace(dstAgent.Skills.Pattern) == "" {
+			continue
+		}
+		dstPath := s.generatePath(dstAgent, model.KindSkills, stem, rel)
+		if strings.TrimSpace(dstPath) == "" {
+			continue
+		}
+		if err := util.WriteFile(dstPath, data); err != nil {
+			return result, fmt.Errorf("write %s for agent %s: %w", dstPath, dstAgent.Name, err)
+		}
+		result = append(result, dstPath)
+		log.Printf("Skill file %s synced to %s", path, dstPath)
+	}
+	return result, nil
+}
+
+func (s *SyncAI) Identify(path string) (*config.Agent, model.Kind, string, string) {
 	clean := filepath.Clean(path)
 	for i := range s.cfg.Agents {
 		a := &s.cfg.Agents[i]
-		if filepath.Clean(a.Context.Path) == clean {
-			return a, model.KindContext, ""
+		if p := strings.TrimSpace(a.Context.Path); p != "" && filepath.Clean(p) == clean {
+			return a, model.KindContext, "", ""
 		}
-		if filepath.Clean(a.Ignore.Path) == clean {
-			return a, model.KindIgnore, ""
+		if p := strings.TrimSpace(a.Ignore.Path); p != "" && filepath.Clean(p) == clean {
+			return a, model.KindIgnore, "", ""
 		}
-		if strings.TrimSpace(a.Rules.Pattern) != "" {
-			// Match by comparing the directory and base pattern, independent of file existence
-			pattern := a.Rules.Pattern
-			patDir := filepath.Clean(filepath.Dir(pattern))
-			fileDir := filepath.Clean(filepath.Dir(clean))
-			if patDir == fileDir {
-				basePattern := filepath.Base(pattern)
-				filename := filepath.Base(clean)
-				// Attempt to extract stem depending on wildcard presence
-				if strings.Contains(basePattern, "*") {
-					parts := strings.Split(basePattern, "*")
-					prefix := parts[0]
-					suffix := ""
-					if len(parts) > 1 {
-						suffix = parts[len(parts)-1]
-					}
-					if strings.HasPrefix(filename, prefix) && strings.HasSuffix(filename, suffix) {
-						stem := strings.TrimPrefix(filename, prefix)
-						stem = strings.TrimSuffix(stem, suffix)
-						return a, model.KindRules, stem
-					}
-				} else {
-					if filename == basePattern {
-						stem := filename
-						if ext := filepath.Ext(stem); ext != "" {
-							stem = strings.TrimSuffix(stem, ext)
-						}
-						return a, model.KindRules, stem
-					}
-				}
+		if pat := strings.TrimSpace(a.Rules.Pattern); pat != "" {
+			if ok, stem := matchPattern(pat, clean); ok {
+				return a, model.KindRules, stem, ""
+			}
+		}
+		if pat := strings.TrimSpace(a.Skills.Pattern); pat != "" {
+			if ok, stem, rel := matchSkillsPattern(pat, clean); ok {
+				return a, model.KindSkills, stem, rel
 			}
 		}
 	}
-	return nil, model.KindUnknown, ""
+	return nil, model.KindUnknown, "", ""
 }
 
 func generate(s *model.DocumentStack, agent string) ([]byte, error) {
