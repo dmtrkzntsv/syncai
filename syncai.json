@@ -23,6 +23,9 @@
       },
       "context": {
         "path": ".github/copilot-instructions.md"
+      },
+      "skills": {
+        "pattern": ".github/skills/*"
       }
     },
     {
