@@ -48,6 +48,15 @@
       "skills": {
         "pattern": ".codex/skills/*"
       }
+    },
+    {
+      "name": "opencode",
+      "context": {
+        "path": "AGENTS.md"
+      },
+      "skills": {
+        "pattern": ".opencode/command/*"
+      }
     }
   ]
 }

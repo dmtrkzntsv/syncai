@@ -13,6 +13,7 @@ agents:
 * GitHub Copilot
 * Claude Code
 * OpenAI Codex
+* OpenCode
 
 It watches the files you specify in a JSON configuration and propagates every change to the corresponding locations for
 the other agents.
