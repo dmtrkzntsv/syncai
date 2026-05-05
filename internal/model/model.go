@@ -11,6 +11,7 @@ const (
 	KindRules   Kind = "rules"
 	KindContext Kind = "context"
 	KindIgnore  Kind = "ignore"
+	KindSkills  Kind = "skills"
 )
 
 const (

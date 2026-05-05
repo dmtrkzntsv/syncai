@@ -11,8 +11,6 @@ agents:
 
 * Cursor
 * GitHub Copilot
-* JetBrains Junie
-* Cline
 * Claude Code
 * OpenAI Codex
 
@@ -22,7 +20,7 @@ the other agents.
 
 ## Supported sync types
 
-SyncAI supports three kinds of synced items in agent configurations:
+SyncAI supports four kinds of synced items in agent configurations:
 
 - **context** — a single file with general AI guidelines or assistant context (for example `AGENTS.md` or `CLAUDE.md`). Configure with `context.path`. The file is copied verbatim to the target location.
 
@@ -30,7 +28,9 @@ SyncAI supports three kinds of synced items in agent configurations:
 
 - **ignore** — a single file with instructions telling the assistant what to ignore (for example `.copilotignore`). Configure with `ignore.path`. The file is copied verbatim.
 
-These sections can be used together for each agent to keep context, many rule files, and ignore files in sync across different assistants.
+- **skills** — a directory pattern matching skill folders (for example `.claude/skills/*`). Each match is treated as a whole skill: every file inside the directory (including nested subfolders, scripts, data, etc.) is mirrored to the equivalent location at every other agent that has a `skills` pattern. The `*` wildcard captures the skill's folder name and is substituted into the target pattern. Skill files are copied verbatim. Deletions are propagated and now-empty target directories are cleaned up automatically down to the configured base directory, which is preserved.
+
+These sections can be used together for each agent to keep context, rule files, ignore files, and skill folders in sync across different assistants.
 
 ## Quick start
 
@@ -64,7 +64,7 @@ The default configuration is a simple JSON map (for more details check [syncai.j
       // agent name
       "name": "<AGENT_NAME>",
       // optional "rules" section
-      // GitHub Copilot calls it "instructions", Cursor and Cline "rules"
+      // GitHub Copilot calls it "instructions", Cursor "rules"
       "rules": {
         "pattern": ".<AGENT>/rules/*.md"
       },
@@ -75,6 +75,13 @@ The default configuration is a simple JSON map (for more details check [syncai.j
       // optional "ignore" section
       "ignore": {
         "path": "/path/to/your/ignorefile"
+      },
+      // optional "skills" section: directory pattern matching skill folders.
+      // The `*` is captured as the skill folder name and substituted on the
+      // other agents. Every file inside the matched directory (recursively)
+      // is mirrored.
+      "skills": {
+        "pattern": ".<AGENT>/skills/*"
       }
     }
   ]

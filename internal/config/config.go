@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,11 +28,16 @@ type Ignore struct {
 	Path string `json:"path"`
 }
 
+type Skills struct {
+	Pattern string `json:"pattern"`
+}
+
 type Agent struct {
 	Name    string  `json:"name"`
 	Rules   Rules   `json:"rules"`
 	Context Context `json:"context"`
 	Ignore  Ignore  `json:"ignore"`
+	Skills  Skills  `json:"skills"`
 }
 
 type Meta struct {
@@ -117,26 +123,89 @@ func (a Agent) Files() []string {
 
 	// Include rules only if a non-empty pattern is configured
 	if pat := strings.TrimSpace(a.Rules.Pattern); pat != "" {
-		matches, err := filepath.Glob(pat)
-		if err != nil {
-			log.Printf("glob %s: %v", pat, err)
-		}
-		for _, match := range matches {
-			path := strings.TrimSpace(match)
-			if path != "" {
-				_, err := os.Stat(path)
-				if err != nil {
-					if os.IsNotExist(err) {
-						// File may not exist yet; silently ignore
-						continue
-					}
-					log.Printf("file error %s: %v", path, err)
-					continue
-				}
-				files = append(files, path)
-			}
-		}
+		files = append(files, globPattern(pat)...)
+	}
+
+	// Include skills only if a non-empty pattern is configured.
+	// Skills patterns match directories; every regular file inside each
+	// matched directory is watched so the entire skill folder syncs.
+	if pat := strings.TrimSpace(a.Skills.Pattern); pat != "" {
+		files = append(files, walkSkillDirs(pat)...)
 	}
 
 	return files
+}
+
+func globPattern(pat string) []string {
+	matches, err := filepath.Glob(pat)
+	if err != nil {
+		log.Printf("glob %s: %v", pat, err)
+		return nil
+	}
+	out := make([]string, 0, len(matches))
+	for _, match := range matches {
+		path := strings.TrimSpace(match)
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			log.Printf("file error %s: %v", path, err)
+			continue
+		}
+		// Skip directories — only file matches are watched
+		if info.IsDir() {
+			continue
+		}
+		out = append(out, path)
+	}
+	return out
+}
+
+func walkSkillDirs(pat string) []string {
+	matches, err := filepath.Glob(pat)
+	if err != nil {
+		log.Printf("glob %s: %v", pat, err)
+		return nil
+	}
+	var out []string
+	for _, match := range matches {
+		path := strings.TrimSpace(match)
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Printf("file error %s: %v", path, err)
+			}
+			continue
+		}
+		if !info.IsDir() {
+			// Pattern matched a file directly; treat it as a single-file skill.
+			out = append(out, path)
+			continue
+		}
+		err = filepath.WalkDir(path, func(p string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				log.Printf("walk error %s: %v", p, walkErr)
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if !d.Type().IsRegular() {
+				return nil
+			}
+			out = append(out, p)
+			return nil
+		})
+		if err != nil {
+			log.Printf("walk %s: %v", path, err)
+		}
+	}
+	return out
 }

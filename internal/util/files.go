@@ -94,6 +94,35 @@ func FileHash(path string) (string, error) {
 	return hex.EncodeToString(sum), nil
 }
 
+// PruneEmptyDirs removes startDir and each ancestor up to (but not including)
+// stopDir as long as the directory is empty. It is a no-op if startDir does
+// not exist, is not empty, or escapes stopDir. Errors other than not-exist
+// are ignored — best-effort cleanup.
+func PruneEmptyDirs(startDir, stopDir string) {
+	if startDir == "" {
+		return
+	}
+	cur := filepath.Clean(startDir)
+	stop := filepath.Clean(stopDir)
+	for cur != "" && cur != "." && cur != "/" && cur != stop {
+		entries, err := os.ReadDir(cur)
+		if err != nil {
+			return
+		}
+		if len(entries) > 0 {
+			return
+		}
+		if err := os.Remove(cur); err != nil {
+			return
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return
+		}
+		cur = parent
+	}
+}
+
 func IsFileExists(path string) bool {
 	if path == "" {
 		return false
