@@ -19,66 +19,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      - name: Get latest release tag
-        id: get_latest
-        uses: actions/github-script@v6
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          result-encoding: string
-          script: |
-            const latest = await github.rest.repos.getLatestRelease({
-              owner: 'flowmitry',
-              repo: 'syncai'
-            });
-            return latest.data.tag_name;
+          go-version-file: go.mod
 
-      - name: Cache syncai binary
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/syncai-cache
-          key: syncai-binary-${{ runner.os }}-${{ steps.get_latest.outputs.result }}
-          restore-keys: |
-            syncai-binary-${{ runner.os }}-
-
-      - name: Download syncai binary
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ${{ runner.temp }}/syncai-cache
-          # Determine OS
-          UNAME=$(uname -s)
-          case "$UNAME" in
-            Linux) OS=linux;;
-            Darwin) OS=darwin;;
-            *) echo "Unsupported OS: $UNAME"; exit 1;;
-          esac
-          # Determine ARCH
-          ARCH_RAW=$(uname -m)
-          case "$ARCH_RAW" in
-            x86_64) ARCH=amd64;;
-            aarch64|arm64) ARCH=arm64;;
-            *) echo "Unsupported ARCH: $ARCH_RAW"; exit 1;;
-          esac
-          NAME="syncai_${OS}_${ARCH}"
-          echo "Looking for asset: $NAME"
-          # Fetch download URL matching exact asset name
-          ASSET_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/flowmitry/syncai/releases/latest | jq -r ".assets[] | select(.name==\"$NAME\") | .browser_download_url")
-          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
-            echo "Error: Could not find asset $NAME in latest release"
-            exit 1
-          fi
-          echo "Downloading from: $ASSET_URL"
-          curl -sL "$ASSET_URL" -o ${{ runner.temp }}/syncai-cache/syncai
-          chmod +x ${{ runner.temp }}/syncai-cache/syncai
+      - name: Build syncai
+        run: make build
 
       - name: Run syncai
         run: |
-          BINARY_PATH="${{ runner.temp }}/syncai-cache/syncai"
+          BINARY_PATH="${{ github.workspace }}/bin/syncai"
           CONFIG_PATH="${{ github.workspace }}/syncai.json"
           if [ ! -f "$CONFIG_PATH" ]; then
             echo "Error: Configuration file $CONFIG_PATH not found."
