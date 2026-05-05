@@ -47,15 +47,6 @@
       }
     },
     {
-      "name": "junie",
-      "context": {
-        "path": ".junie/guidelines.md"
-      },
-      "ignore": {
-        "path": ".aiignore"
-      }
-    },
-    {
       "name": "codex",
       "context": {
         "path": "AGENTS.md"

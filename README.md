@@ -11,7 +11,6 @@ agents:
 
 * Cursor
 * GitHub Copilot
-* JetBrains Junie
 * Cline
 * Claude Code
 * OpenAI Codex
