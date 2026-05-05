@@ -11,7 +11,6 @@ agents:
 
 * Cursor
 * GitHub Copilot
-* Cline
 * Claude Code
 * OpenAI Codex
 
@@ -65,7 +64,7 @@ The default configuration is a simple JSON map (for more details check [syncai.j
       // agent name
       "name": "<AGENT_NAME>",
       // optional "rules" section
-      // GitHub Copilot calls it "instructions", Cursor and Cline "rules"
+      // GitHub Copilot calls it "instructions", Cursor "rules"
       "rules": {
         "pattern": ".<AGENT>/rules/*.md"
       },

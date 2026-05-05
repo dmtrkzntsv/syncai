@@ -32,12 +32,6 @@
       }
     },
     {
-      "name": "cline",
-      "rules": {
-        "pattern": ".clinerules/*.md"
-      }
-    },
-    {
       "name": "claude",
       "context": {
         "path": "CLAUDE.md"
