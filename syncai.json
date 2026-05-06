@@ -34,7 +34,7 @@
         "pattern": ".github/skills/*"
       },
       "mcp": {
-        "path": ".vscode/mcp.json"
+        "path": ".github/copilot-cli-mcp.json"
       }
     },
     {

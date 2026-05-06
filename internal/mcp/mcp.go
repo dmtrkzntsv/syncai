@@ -76,7 +76,11 @@ func GetAdapter(agentName string) Adapter {
 	case model.AgentClaude:
 		return &dedicatedJSON{topLevelKey: "mcpServers", emitType: true}
 	case model.AgentCopilot:
-		return &dedicatedJSON{topLevelKey: "servers", emitType: true}
+		// GitHub Copilot CLI: ~/.copilot/mcp-config.json (or any path
+		// passed via --mcp-config). Top-level key is "mcpServers" —
+		// distinct from VS Code Copilot's `.vscode/mcp.json` which
+		// uses "servers".
+		return &dedicatedJSON{topLevelKey: "mcpServers", emitType: true}
 	case model.AgentCodex:
 		return &codexAdapter{}
 	case model.AgentOpenCode:
