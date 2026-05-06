@@ -17,6 +17,9 @@
       },
       "skills": {
         "pattern": ".cursor/skills/*"
+      },
+      "mcp": {
+        "path": ".cursor/mcp.json"
       }
     },
     {
@@ -29,6 +32,9 @@
       },
       "skills": {
         "pattern": ".github/skills/*"
+      },
+      "mcp": {
+        "path": ".github/copilot-cli-mcp.json"
       }
     },
     {
@@ -38,6 +44,9 @@
       },
       "skills": {
         "pattern": ".claude/skills/*"
+      },
+      "mcp": {
+        "path": ".mcp.json"
       }
     },
     {
@@ -47,6 +56,9 @@
       },
       "skills": {
         "pattern": ".codex/skills/*"
+      },
+      "mcp": {
+        "path": ".codex/config.toml"
       }
     },
     {
@@ -56,6 +68,9 @@
       },
       "skills": {
         "pattern": ".opencode/skills/*"
+      },
+      "mcp": {
+        "path": "opencode.json"
       }
     }
   ]

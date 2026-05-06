@@ -21,7 +21,7 @@ the other agents.
 
 ## Supported sync types
 
-SyncAI supports four kinds of synced items in agent configurations:
+SyncAI supports five kinds of synced items in agent configurations:
 
 - **context** — a single file with general AI guidelines or assistant context (for example `AGENTS.md` or `CLAUDE.md`). Configure with `context.path`. The file is copied verbatim to the target location.
 
@@ -31,7 +31,9 @@ SyncAI supports four kinds of synced items in agent configurations:
 
 - **skills** — a directory pattern matching skill folders (for example `.claude/skills/*`). Each match is treated as a whole skill: every file inside the directory (including nested subfolders, scripts, data, etc.) is mirrored to the equivalent location at every other agent that has a `skills` pattern. The `*` wildcard captures the skill's folder name and is substituted into the target pattern. Skill files are copied verbatim. Deletions are propagated and now-empty target directories are cleaned up automatically down to the configured base directory, which is preserved.
 
-These sections can be used together for each agent to keep context, rule files, ignore files, and skill folders in sync across different assistants.
+- **mcp** — the agent's MCP (Model Context Protocol) server config file. Configure with `mcp.path`. Each agent has its own on-disk schema: Cursor `.cursor/mcp.json`, Copilot CLI `~/.copilot/mcp-config.json` (or any path passed via `--mcp-config`), Claude `.mcp.json`, Codex `.codex/config.toml`, OpenCode `opencode.json`. SyncAI normalizes server entries through a per-agent adapter, so when you add or change a server in one agent's file the corresponding entry is regenerated in every other agent's native format. For Codex (`config.toml`) and OpenCode (`opencode.json`), only the MCP section is rewritten — unrelated keys in the same file are preserved. Codex only supports stdio MCP servers; remote (HTTP/SSE) servers are skipped on write to Codex with a warning. Deletions of the entire MCP file are not propagated (similar to context/ignore) — to remove a server, delete just its entry from the source file.
+
+These sections can be used together for each agent to keep context, rule files, ignore files, skill folders, and MCP servers in sync across different assistants.
 
 ## Quick start
 
@@ -83,6 +85,12 @@ The default configuration is a simple JSON map (for more details check [syncai.j
       // is mirrored.
       "skills": {
         "pattern": ".<AGENT>/skills/*"
+      },
+      // optional "mcp" section: path to the agent's MCP server config file.
+      // Each agent's schema is handled by a per-agent adapter; for shared
+      // config files (Codex, OpenCode) only the MCP section is rewritten.
+      "mcp": {
+        "path": ".<AGENT>/mcp.json"
       }
     }
   ]

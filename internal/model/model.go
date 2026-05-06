@@ -12,11 +12,15 @@ const (
 	KindContext Kind = "context"
 	KindIgnore  Kind = "ignore"
 	KindSkills  Kind = "skills"
+	KindMCP     Kind = "mcp"
 )
 
 const (
-	AgentCursor  string = "cursor"
-	AgentCopilot string = "copilot"
+	AgentCursor   string = "cursor"
+	AgentCopilot  string = "copilot"
+	AgentClaude   string = "claude"
+	AgentCodex    string = "codex"
+	AgentOpenCode string = "opencode"
 )
 
 type FileInfo struct {

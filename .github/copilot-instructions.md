@@ -18,7 +18,7 @@ CLI flags: `-config`, `-workdir`, `-no-watch` (one-shot for CI), `-self-update`,
 
 ## Architecture
 
-SyncAI is a polling watcher that propagates AI-assistant config files between agents (Cursor, Copilot, Claude Code, Codex). The whole program is a single Go binary; the moving parts split cleanly along four "sync kinds" defined in `internal/model/model.go`:
+SyncAI is a polling watcher that propagates AI-assistant config files between agents (Cursor, Copilot, Claude Code, Codex, OpenCode). The whole program is a single Go binary; the moving parts split cleanly along five "sync kinds" defined in `internal/model/model.go`:
 
 | Kind     | Source config field      | Source unit            | Destination logic |
 |----------|--------------------------|------------------------|-------------------|
@@ -26,6 +26,7 @@ SyncAI is a polling watcher that propagates AI-assistant config files between ag
 | ignore   | `Agent.Ignore.Path`      | single file            | verbatim copy |
 | rules    | `Agent.Rules.Pattern`    | files matched by glob  | content rewritten by per-agent rules generator (frontmatter shape differs between cursor's `globs/alwaysApply` and copilot's `applyTo`) |
 | skills   | `Agent.Skills.Pattern`   | **whole directory** matched by glob | every file inside the matched dir copied verbatim, preserving the in-skill relative path |
+| mcp      | `Agent.MCP.Path`         | single file (may be shared with other agent settings) | source agent's adapter parses servers into a normalized `mcp.Server` map; each peer's adapter rewrites only the MCP section of its file (preserving non-MCP content for `.codex/config.toml` and `opencode.json`) |
 
 ### Lifecycle
 
@@ -47,14 +48,15 @@ SyncAI is a polling watcher that propagates AI-assistant config files between ag
 - `generatePatternPath(pattern, stem)` — substitutes `stem` into every `*` component. For skills, callers join `rel` afterwards in `generatePath`.
 - `skillsBaseDir(pattern)` — the literal prefix of the pattern before its first wildcard component. Used to bound the empty-dir cleanup walk.
 
-### Two sync paths in `(*SyncAI).Sync`
+### Three sync paths in `(*SyncAI).Sync`
 
 - **Skills** → `syncSkill`: read source bytes once, `util.WriteFile` them to every peer's substituted destination. No frontmatter parsing — skill folders may contain scripts/data that aren't markdown.
+- **MCP** → `syncMCP`: parse source via `mcp.GetAdapter(srcAgent.Name).Parse(path)` into a `map[string]mcp.Server`, then for each peer call its adapter's `Write(dstPath, servers)`. Adapters live in `internal/mcp/`: `dedicated.go` covers cursor/claude/copilot (JSON, differing only in top-level key and whether `type` is emitted for stdio); `codex.go` does surgical text-level rewriting of `[mcp_servers.*]` blocks in `.codex/config.toml` to preserve other Codex settings (and skips remote servers since Codex is stdio-only); `opencode.go` round-trips through `map[string]json.RawMessage` so unrelated top-level keys in `opencode.json` survive.
 - **Everything else** → document-stack path: parse all peers' versions of the logical file, sort with the changed path forced last (so it wins regardless of mtime), pass through `generate()` which dispatches to a per-agent `RulesGenerator` only when `kind == KindRules`. Context/ignore fall through verbatim.
 
 ### Deletes and empty-dir pruning
 
-`(*SyncAI).Delete` only propagates deletions for `KindRules` and `KindSkills` (context/ignore deletions are intentionally non-propagating to avoid accidents). After each successful peer-side skill file removal, `util.PruneEmptyDirs(dirOf(dst), skillsBaseDir(dstAgent.Skills.Pattern))` walks upward removing empty dirs, stopping at the configured base — so `.codex/skills/` survives even when its last skill is deleted.
+`(*SyncAI).Delete` only propagates deletions for `KindRules` and `KindSkills` (context, ignore, and MCP deletions are intentionally non-propagating to avoid accidents — to remove an MCP server, edit its entry out of the source file rather than deleting the whole file). After each successful peer-side skill file removal, `util.PruneEmptyDirs(dirOf(dst), skillsBaseDir(dstAgent.Skills.Pattern))` walks upward removing empty dirs, stopping at the configured base — so `.codex/skills/` survives even when its last skill is deleted.
 
 ### Atomic file writes
 
