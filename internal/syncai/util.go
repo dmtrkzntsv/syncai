@@ -27,6 +27,8 @@ func (s *SyncAI) generatePath(agent *config.Agent, kind model.Kind, stem, rel st
 			return dir
 		}
 		return filepath.Join(dir, rel)
+	case model.KindMCP:
+		return agent.MCP.Path
 	default:
 		return ""
 	}

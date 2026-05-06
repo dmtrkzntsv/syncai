@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"syncai/internal/generator"
+	"syncai/internal/mcp"
 	"syncai/internal/model"
 	"syncai/internal/util"
 
@@ -76,6 +77,10 @@ func (s *SyncAI) Sync(path string) ([]string, error) {
 
 	if kind == model.KindSkills {
 		return s.syncSkill(srcAgent, path, stem, rel)
+	}
+
+	if kind == model.KindMCP {
+		return s.syncMCP(srcAgent, path)
 	}
 
 	stack := model.DocumentStack{
@@ -162,6 +167,47 @@ func (s *SyncAI) syncSkill(srcAgent *config.Agent, path, stem, rel string) ([]st
 	return result, nil
 }
 
+// syncMCP propagates MCP server entries from the source agent's MCP
+// config file to every other agent that has an MCP path configured.
+// Each peer is written via its own adapter so format differences
+// (JSON shape, top-level key, TOML for Codex, embedded layout for
+// OpenCode) are handled correctly. Non-MCP content in shared config
+// files is preserved by the peer adapter.
+func (s *SyncAI) syncMCP(srcAgent *config.Agent, path string) ([]string, error) {
+	result := make([]string, 0)
+	srcAdapter := mcp.GetAdapter(srcAgent.Name)
+	if srcAdapter == nil {
+		log.Printf("MCP sync: no adapter for agent %s, skipping", srcAgent.Name)
+		return result, nil
+	}
+	servers, err := srcAdapter.Parse(path)
+	if err != nil {
+		return result, fmt.Errorf("parse MCP %s: %w", path, err)
+	}
+
+	for i := range s.cfg.Agents {
+		dstAgent := &s.cfg.Agents[i]
+		if dstAgent.Name == srcAgent.Name {
+			continue
+		}
+		dstPath := strings.TrimSpace(dstAgent.MCP.Path)
+		if dstPath == "" {
+			continue
+		}
+		dstAdapter := mcp.GetAdapter(dstAgent.Name)
+		if dstAdapter == nil {
+			log.Printf("MCP sync: no adapter for agent %s, skipping", dstAgent.Name)
+			continue
+		}
+		if err := dstAdapter.Write(dstPath, servers); err != nil {
+			return result, fmt.Errorf("write MCP %s for agent %s: %w", dstPath, dstAgent.Name, err)
+		}
+		result = append(result, dstPath)
+		log.Printf("MCP %s synced to %s", path, dstPath)
+	}
+	return result, nil
+}
+
 func (s *SyncAI) Identify(path string) (*config.Agent, model.Kind, string, string) {
 	clean := filepath.Clean(path)
 	for i := range s.cfg.Agents {
@@ -171,6 +217,9 @@ func (s *SyncAI) Identify(path string) (*config.Agent, model.Kind, string, strin
 		}
 		if p := strings.TrimSpace(a.Ignore.Path); p != "" && filepath.Clean(p) == clean {
 			return a, model.KindIgnore, "", ""
+		}
+		if p := strings.TrimSpace(a.MCP.Path); p != "" && filepath.Clean(p) == clean {
+			return a, model.KindMCP, "", ""
 		}
 		if pat := strings.TrimSpace(a.Rules.Pattern); pat != "" {
 			if ok, stem := matchPattern(pat, clean); ok {

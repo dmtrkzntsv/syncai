@@ -32,12 +32,17 @@ type Skills struct {
 	Pattern string `json:"pattern"`
 }
 
+type MCP struct {
+	Path string `json:"path"`
+}
+
 type Agent struct {
 	Name    string  `json:"name"`
 	Rules   Rules   `json:"rules"`
 	Context Context `json:"context"`
 	Ignore  Ignore  `json:"ignore"`
 	Skills  Skills  `json:"skills"`
+	MCP     MCP     `json:"mcp"`
 }
 
 type Meta struct {
@@ -131,6 +136,14 @@ func (a Agent) Files() []string {
 	// matched directory is watched so the entire skill folder syncs.
 	if pat := strings.TrimSpace(a.Skills.Pattern); pat != "" {
 		files = append(files, walkSkillDirs(pat)...)
+	}
+
+	// Include the MCP config file if configured. The file may be dedicated
+	// (e.g. `.cursor/mcp.json`) or shared with other agent settings (e.g.
+	// `.codex/config.toml`, `opencode.json`); the per-agent adapter handles
+	// the difference.
+	if p := strings.TrimSpace(a.MCP.Path); p != "" {
+		files = append(files, p)
 	}
 
 	return files
